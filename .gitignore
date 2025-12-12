@@ -12,3 +12,6 @@ dist/entrypoint
 
 # exclude uv to allow optional dependencies to be installed on streamlit
 uv.lock
+
+**/__pycache__
+**/.DS_Store

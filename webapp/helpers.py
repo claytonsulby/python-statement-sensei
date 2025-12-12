@@ -9,7 +9,11 @@ from monopoly.pipeline import Pipeline
 from monopoly.statements.base import SafetyCheckError
 from pydantic import SecretStr
 
+from webapp.banks.pnc import PNCDebitBank, PNCCreditCardBank
 from webapp.models import ProcessedFile, TransactionMetadata
+
+banks.append(PNCDebitBank)
+banks.append(PNCCreditCardBank)
 
 
 def build_pipeline(document: PdfDocument, password: str | None = None) -> tuple[Pipeline, PdfParser]:
@@ -36,6 +40,16 @@ def parse_bank_statement(document: PdfDocument, password: str | None = None) -> 
 
             document = PdfParser.apply_ocr(document)
             pipeline, parser = build_pipeline(document, password)
+
+    # Custom extraction for PNC banks
+    if parser.bank.name in ["PNCDebitBank", "PNCCreditCardBank"]:
+        # parser.bank is the class (or instance? PdfParser stores class usually)
+        # Actually PdfParser(bank, ...) takes the bank class.
+        # parser.bank is the bank class.
+        # So we can just call extract on it.
+        transactions = parser.bank.extract(document)
+        metadata = TransactionMetadata(parser.bank.name)
+        return ProcessedFile(transactions, metadata)
 
     # skip initial safety check, and handle it outside the pipeline
     # so that we can raise a warning and still show transactions
@@ -68,11 +82,20 @@ def create_df(processed_files: list[ProcessedFile]) -> pd.DataFrame:
     dataframes = []
     for file in processed_files:
         df = pd.DataFrame(file)
+        
+        if df.empty:
+            continue
+
         df["date"] = pd.to_datetime(df["date"]).dt.date
         df["bank"] = file.metadata.bank_name
 
-        df = df.drop(columns="polarity")
+        if "polarity" in df.columns:
+            df = df.drop(columns="polarity")
         dataframes.append(df)
+
+    if not dataframes:
+        return pd.DataFrame(columns=["date", "description", "amount", "bank"])
+
 
     concat_df = pd.concat(dataframes)
     st.session_state["df"] = concat_df
