@@ -9,11 +9,21 @@ from monopoly.pipeline import Pipeline
 from monopoly.statements.base import SafetyCheckError
 from pydantic import SecretStr
 
+from webapp.banks.health_equity import HealthEquityBank
 from webapp.banks.pnc import PNCDebitBank, PNCCreditCardBank
+from webapp.banks.vanguard import (
+    Vanguard401kStatementBank,
+    VanguardTransactionHistoryPrintBank,
+    VanguardCustomActivityReportBank,
+)
 from webapp.models import ProcessedFile, TransactionMetadata
 
 banks.append(PNCDebitBank)
 banks.append(PNCCreditCardBank)
+banks.append(VanguardTransactionHistoryPrintBank)
+banks.append(VanguardCustomActivityReportBank)
+banks.append(Vanguard401kStatementBank)
+banks.append(HealthEquityBank)
 
 
 def build_pipeline(document: PdfDocument, password: str | None = None) -> tuple[Pipeline, PdfParser]:
@@ -41,8 +51,15 @@ def parse_bank_statement(document: PdfDocument, password: str | None = None) -> 
             document = PdfParser.apply_ocr(document)
             pipeline, parser = build_pipeline(document, password)
 
-    # Custom extraction for PNC banks
-    if parser.bank.name in ["PNCDebitBank", "PNCCreditCardBank"]:
+    # Custom extraction for PNC and Vanguard banks
+    if parser.bank.name in [
+        "PNCDebitBank",
+        "PNCCreditCardBank",
+        "VanguardTransactionHistoryPrintBank",
+        "VanguardCustomActivityReportBank",
+        "Vanguard401kStatementBank",
+        "HealthEquityBank",
+    ]:
         # parser.bank is the class (or instance? PdfParser stores class usually)
         # Actually PdfParser(bank, ...) takes the bank class.
         # parser.bank is the bank class.
